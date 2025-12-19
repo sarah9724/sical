@@ -8,6 +8,7 @@ export default function ResultsPage() {
   const [results, setResults] = useState<CalculationResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const fetchResults = async () => {
     setLoading(true);
@@ -33,6 +34,41 @@ export default function ResultsPage() {
     fetchResults();
   }, []);
 
+  const handleExport = async () => {
+    setExporting(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/export');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || '导出失败');
+        return;
+      }
+
+      // 获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const fileNameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
+      const fileName = fileNameMatch ? fileNameMatch[1] : '社保计算结果.xlsx';
+
+      // 创建下载链接
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      setError('导出过程中发生错误');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
@@ -40,13 +76,24 @@ export default function ResultsPage() {
           <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm">
             ← 返回主页
           </Link>
-          <button
-            onClick={fetchResults}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            {loading ? '刷新中...' : '刷新数据'}
-          </button>
+          <div className="flex space-x-4">
+            {results.length > 0 && (
+              <button
+                onClick={handleExport}
+                disabled={exporting || loading}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+              >
+                {exporting ? '导出中...' : '导出 Excel'}
+              </button>
+            )}
+            <button
+              onClick={fetchResults}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? '刷新中...' : '刷新数据'}
+            </button>
+          </div>
         </div>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-8">计算结果查询</h1>

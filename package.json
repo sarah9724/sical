@@ -15,6 +15,9 @@
     "react-dom": "^18",
     "xlsx": "^0.18.5"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
