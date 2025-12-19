@@ -50,10 +50,15 @@ export async function POST(request: NextRequest) {
             throw insertError;
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Supabase error:', error);
         return NextResponse.json(
-          { error: '数据插入失败：' + (error as any).message },
+          {
+            error: '数据插入失败',
+            details: error.message,
+            code: error.code,
+            hint: error.hint
+          },
           { status: 500 }
         );
       }

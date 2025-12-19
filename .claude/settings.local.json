@@ -12,7 +12,8 @@
       "Bash(git config:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []
