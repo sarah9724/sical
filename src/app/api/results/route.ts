@@ -3,12 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    // 获取所有记录，不排序
-    const { data: allData, error: allError } = await supabaseAdmin
-      .from('results')
-      .select('*');
-
-    // 获取排序后的记录 - 改为按 id 降序排序，确保所有记录都能返回
+    // 获取排序后的记录 - 直接获取所有记录并按 id 降序排序
     const { data, error } = await supabaseAdmin
       .from('results')
       .select('*')
@@ -18,6 +13,12 @@ export async function GET() {
     const { count, error: countError } = await supabaseAdmin
       .from('results')
       .select('*', { count: 'exact', head: true });
+
+    // 为了调试，也获取数据样本
+    const { data: allData, error: allError } = await supabaseAdmin
+      .from('results')
+      .select('id, employee_name')
+      .limit(20);
 
     if (error) {
       console.error('Supabase error:', error);
