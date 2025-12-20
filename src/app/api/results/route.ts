@@ -14,11 +14,20 @@ export async function GET() {
       .from('results')
       .select('*', { count: 'exact', head: true });
 
-    // 为了调试，也获取数据样本
+    // 为了调试，获取所有记录
     const { data: allData, error: allError } = await supabaseAdmin
       .from('results')
-      .select('id, employee_name')
-      .limit(20);
+      .select('id, employee_name');
+
+    // 检查最大 ID
+    const maxId = allData && allData.length > 0 ? Math.max(...allData.map(r => r.id)) : 0;
+
+    // 获取最新 10 条记录
+    const { data: latestData, error: latestError } = await supabaseAdmin
+      .from('results')
+      .select('*')
+      .gte('id', Math.max(0, maxId - 9))
+      .order('id', { ascending: false });
 
     if (error) {
       console.error('Supabase error:', error);
@@ -42,7 +51,11 @@ export async function GET() {
       debug: {
         totalRecords: count,
         allRecordsCount: Array.isArray(allData) ? allData.length : 0,
-        sortedRecordsCount: Array.isArray(data) ? data.length : 0
+        sortedRecordsCount: Array.isArray(data) ? data.length : 0,
+        latestCount: Array.isArray(latestData) ? latestData.length : 0,
+        maxId: maxId,
+        sampleIds: allData?.slice(0, 10).map(r => ({ id: r.id, name: r.employee_name })) || [],
+        allEmployeeNames: allData?.map(r => r.employee_name) || []
       },
       // 添加时间戳以防止缓存
       timestamp: new Date().toISOString()
