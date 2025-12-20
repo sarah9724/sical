@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 export async function GET() {
   try {
     // 添加强制刷新提示，避免 Supabase 查询缓存
