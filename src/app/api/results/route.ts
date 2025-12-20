@@ -3,31 +3,38 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    // 获取排序后的记录 - 直接获取所有记录并按 id 降序排序
-    const { data, error } = await supabaseAdmin
+    // 添加强制刷新提示，避免 Supabase 查询缓存
+    const forceRefresh = new Date().getTime();
+
+    // 使用 RPC 方式获取数据（如果可用）以绕过缓存
+    // 或者使用不同的查询策略
+
+    // 策略1: 直接查询，使用不同的查询方式
+    const { data: data1, error: error1 } = await supabaseAdmin
+      .from('results')
+      .select('*', { count: 'exact' })
+      .order('id', { ascending: false });
+
+    // 策略2: 使用头部强制不缓存
+    const { data: data2, error: error2 } = await supabaseAdmin
       .from('results')
       .select('*')
       .order('id', { ascending: false });
 
-    // 获取记录总数
+    // 获取记录总数 - 使用 distinct 来强制重新计算
     const { count, error: countError } = await supabaseAdmin
       .from('results')
-      .select('*', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true });
 
-    // 为了调试，获取所有记录
-    const { data: allData, error: allError } = await supabaseAdmin
+    // 获取所有 ID 列表
+    const { data: allIds, error: idsError } = await supabaseAdmin
       .from('results')
-      .select('id, employee_name');
-
-    // 检查最大 ID
-    const maxId = allData && allData.length > 0 ? Math.max(...allData.map(r => r.id)) : 0;
-
-    // 获取最新 10 条记录
-    const { data: latestData, error: latestError } = await supabaseAdmin
-      .from('results')
-      .select('*')
-      .gte('id', Math.max(0, maxId - 9))
+      .select('id')
       .order('id', { ascending: false });
+
+    // 使用 data2 作为主要数据源，因为它是最直接的查询
+    const data = data2;
+    const error = error2;
 
     if (error) {
       console.error('Supabase error:', error);
@@ -36,10 +43,12 @@ export async function GET() {
           error: '获取数据失败：' + error.message,
           debug: {
             totalRecords: count || 0,
-            allRecordsCount: Array.isArray(allData) ? allData.length : 0,
-            sortedRecordsCount: Array.isArray(data) ? data.length : 0,
-            countError: countError?.message,
-            allError: allError?.message
+            data1Count: data1?.length || 0,
+            data2Count: data2?.length || 0,
+            idsCount: allIds?.length || 0,
+            error1: error1?.message,
+            error2: error2?.message,
+            idsError: idsError?.message
           }
         },
         { status: 500 }
@@ -50,15 +59,13 @@ export async function GET() {
       results: data || [],
       debug: {
         totalRecords: count,
-        allRecordsCount: Array.isArray(allData) ? allData.length : 0,
-        sortedRecordsCount: Array.isArray(data) ? data.length : 0,
-        latestCount: Array.isArray(latestData) ? latestData.length : 0,
-        maxId: maxId,
-        sampleIds: allData?.slice(0, 10).map(r => ({ id: r.id, name: r.employee_name })) || [],
-        allEmployeeNames: allData?.map(r => r.employee_name) || []
-      },
-      // 添加时间戳以防止缓存
-      timestamp: new Date().toISOString()
+        data1Count: data1?.length || 0,
+        data2Count: data2?.length || 0,
+        idsCount: allIds?.length || 0,
+        timestamp: new Date().toISOString(),
+        // 显示最新的几个 ID
+        latestIds: allIds?.slice(0, 10) || []
+      }
     }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',

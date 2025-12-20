@@ -15,20 +15,32 @@ export default function ResultsPage() {
     setError('');
 
     try {
-      // 添加时间戳防止缓存
-      const response = await fetch(`/api/results?t=${Date.now()}`);
+      // 尝试使用新的无缓存端点
+      const response = await fetch(`/api/results-fresh?_t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       const data = await response.json();
 
       if (response.ok) {
         setResults(data.results || []);
-        // 添加调试信息
         console.log('获取到的记录数:', data.results?.length || 0);
-        console.log('调试信息:', data.debug);
+        console.log('时间戳:', data.timestamp);
       } else {
-        setError(data.error || '获取数据失败');
+        // 如果新端点失败，尝试旧端点
+        console.warn('新端点失败，尝试旧端点:', data.error);
+        const fallbackResponse = await fetch(`/api/results?t=${Date.now()}`);
+        const fallbackData = await fallbackResponse.json();
+
+        if (fallbackResponse.ok) {
+          setResults(fallbackData.results || []);
+          console.log('使用旧端点获取到的记录数:', fallbackData.results?.length || 0);
+        } else {
+          setError(data.error || fallbackData.error || '获取数据失败');
+        }
       }
     } catch (error) {
       setError('获取数据时发生错误');
+      console.error('Fetch error:', error);
     } finally {
       setLoading(false);
     }
