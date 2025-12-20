@@ -15,11 +15,15 @@ export default function ResultsPage() {
     setError('');
 
     try {
-      const response = await fetch('/api/results');
+      // 添加时间戳防止缓存
+      const response = await fetch(`/api/results?t=${Date.now()}`);
       const data = await response.json();
 
       if (response.ok) {
         setResults(data.results || []);
+        // 添加调试信息
+        console.log('获取到的记录数:', data.results?.length || 0);
+        console.log('调试信息:', data.debug);
       } else {
         setError(data.error || '获取数据失败');
       }

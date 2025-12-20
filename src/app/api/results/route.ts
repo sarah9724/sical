@@ -42,6 +42,14 @@ export async function GET() {
         totalRecords: count,
         allRecordsCount: Array.isArray(allData) ? allData.length : 0,
         sortedRecordsCount: Array.isArray(data) ? data.length : 0
+      },
+      // 添加时间戳以防止缓存
+      timestamp: new Date().toISOString()
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
   } catch (error) {
