@@ -17,22 +17,31 @@ export default function ResultsPage() {
     try {
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(7);
+      const requestId = `${timestamp}-${randomId}`;
 
-      // 步骤1: 先发送POST请求清除缓存
-      await fetch(`/api/results-force-refresh`, {
+      console.log(`[${requestId}] 开始强制刷新数据...`);
+
+      // 步骤1: 先使用POST请求刷新连接
+      console.log(`[${requestId}] 步骤1: 刷新数据库连接...`);
+      await fetch(`/api/results-raw`, {
         method: 'POST',
         headers: {
-          'Cache-Control': 'no-cache',
-          'X-Force-Clear': 'true'
+          'Cache-Control': 'no-cache, no-store',
+          'X-Request-ID': requestId
         }
       });
 
-      // 步骤2: 立即获取最新数据
-      const response = await fetch(`/api/results-force-refresh?_t=${timestamp}&_r=${randomId}`, {
+      // 步骤2: 等待一小段时间确保连接刷新
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // 步骤3: 使用原始查询API获取最新数据
+      console.log(`[${requestId}] 步骤2: 执行原始查询...`);
+      const response = await fetch(`/api/results-raw?t=${timestamp}&r=${randomId}`, {
         cache: 'no-store',
         headers: {
-          'Cache-Control': 'no-cache, no-store',
-          'X-Force-Refresh': 'true'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Request-ID': requestId,
+          'X-Bypass-Cache': 'true'
         }
       });
 
@@ -40,30 +49,57 @@ export default function ResultsPage() {
 
       if (response.ok) {
         setResults(data.results || []);
-        console.log('强制刷新获取到的记录数:', data.results?.length || 0);
-        console.log('刷新时间戳:', data.timestamp);
-        console.log('刷新方式:', data.method || 'force-refresh');
-        console.log('缓存状态:', data.forceRefresh);
-      } else {
-        // 如果强制刷新失败，尝试原有的方案
-        console.warn('强制刷新失败，尝试原方案:', data.error);
-        const fallbackResponse = await fetch(`/api/results-fresh?_t=${Date.now()}`, {
-          cache: 'no-store'
+        console.log(`[${requestId}] ✅ 原始查询成功:`, {
+          记录数: data.results?.length || 0,
+          查询方法: data.method,
+          时间戳: data.timestamp,
+          连接ID: data.connectionId
         });
-        const fallbackData = await fallbackResponse.json();
+      } else {
+        console.warn(`[${requestId}] 原始查询失败，尝试强制刷新方案:`, data.error);
 
-        if (fallbackResponse.ok) {
-          setResults(fallbackData.results || []);
-          console.log('使用备用方案获取到的记录数:', fallbackData.results?.length || 0);
+        // 步骤4: 如果原始查询失败，尝试之前的强制刷新方案
+        const forceRefreshResponse = await fetch(`/api/results-force-refresh?_t=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'X-Request-ID': requestId
+          }
+        });
+
+        const forceRefreshData = await forceRefreshResponse.json();
+
+        if (forceRefreshResponse.ok) {
+          setResults(forceRefreshData.results || []);
+          console.log(`[${requestId}] ✅ 强制刷新成功:`, {
+            记录数: forceRefreshData.results?.length || 0,
+            刷新方式: forceRefreshData.method
+          });
         } else {
-          setError(data.error || fallbackData.error || '获取数据失败');
+          // 步骤5: 最后的备用方案
+          console.warn(`[${requestId}] 所有方案都失败了，使用最后的备用方案`);
+          const fallbackResponse = await fetch(`/api/results-fresh?_t=${Date.now()}&backup=true`, {
+            cache: 'no-store'
+          });
+          const fallbackData = await fallbackResponse.json();
+
+          if (fallbackResponse.ok) {
+            setResults(fallbackData.results || []);
+            console.log(`[${requestId}] ✅ 备用方案成功:`, {
+              记录数: fallbackData.results?.length || 0
+            });
+          } else {
+            setError(`无法获取最新数据: ${data.error || forceRefreshData.error || fallbackData.error || '未知错误'}`);
+            console.error(`[${requestId}] ❌ 所有方案都失败了`);
+          }
         }
       }
     } catch (error) {
-      setError('获取数据时发生错误');
+      setError('获取数据时发生网络错误');
       console.error('Fetch error:', error);
     } finally {
       setLoading(false);
+      console.log(`[${requestId}] 刷新请求完成`);
     }
   };
 

@@ -13,7 +13,9 @@
       "Bash(git remote add:*)",
       "Bash(git push:*)",
       "Bash(curl:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(ping:*)",
+      "Bash(git remote set-url:*)"
     ],
     "deny": [],
     "ask": []
