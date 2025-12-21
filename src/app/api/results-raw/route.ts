@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,9 @@ export const fetchCache = 'force-no-store';
 
 export async function GET() {
   try {
+    noStore();
     console.log('RAW QUERY: Starting raw database query at:', new Date().toISOString());
+    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
 
     // 每次都创建全新的客户端连接，避免连接池缓存
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -23,9 +26,21 @@ export async function GET() {
         schema: 'public'
       },
       global: {
+        fetch: (url, options) =>
+          fetch(url, {
+            ...options,
+            cache: 'no-store',
+            headers: {
+              ...(options?.headers || {}),
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              'X-Request-ID': requestId,
+              'X-Bypass-Cache': `raw-${requestId}`
+            }
+          }),
         headers: {
           'Cache-Control': 'no-cache',
-          'X-Custom-Header': `bypass-${Date.now()}-${Math.random()}`
+          'X-Custom-Header': `bypass-${requestId}`
         }
       }
     });
@@ -116,6 +131,7 @@ export async function GET() {
 
 export async function POST() {
   try {
+    noStore();
     // POST请求用于强制刷新连接
     console.log('POST: Refreshing database connection at:', new Date().toISOString());
 

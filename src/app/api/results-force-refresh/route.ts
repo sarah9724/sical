@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +8,7 @@ export const fetchCache = 'force-no-store';
 
 export async function GET() {
   try {
+    noStore();
     console.log('FORCE REFRESH: Getting results at:', new Date().toISOString());
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(7);
@@ -97,6 +99,7 @@ export async function GET() {
 
 export async function POST() {
   try {
+    noStore();
     // POST请求用于强制清除缓存
     console.log('CLEARING CACHE at:', new Date().toISOString());
 

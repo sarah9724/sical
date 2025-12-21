@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +8,7 @@ export const fetchCache = 'force-no-store';
 
 export async function GET() {
   try {
+    noStore();
     console.log('Fetching fresh results at:', new Date().toISOString());
     const requestId = Math.random().toString(36).substring(7);
 
