@@ -15,25 +15,46 @@ export default function ResultsPage() {
     setError('');
 
     try {
-      // 尝试使用新的无缓存端点
-      const response = await fetch(`/api/results-fresh?_t=${Date.now()}`, {
-        cache: 'no-store'
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(7);
+
+      // 步骤1: 先发送POST请求清除缓存
+      await fetch(`/api/results-force-refresh`, {
+        method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'X-Force-Clear': 'true'
+        }
       });
+
+      // 步骤2: 立即获取最新数据
+      const response = await fetch(`/api/results-force-refresh?_t=${timestamp}&_r=${randomId}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store',
+          'X-Force-Refresh': 'true'
+        }
+      });
+
       const data = await response.json();
 
       if (response.ok) {
         setResults(data.results || []);
-        console.log('获取到的记录数:', data.results?.length || 0);
-        console.log('时间戳:', data.timestamp);
+        console.log('强制刷新获取到的记录数:', data.results?.length || 0);
+        console.log('刷新时间戳:', data.timestamp);
+        console.log('刷新方式:', data.method || 'force-refresh');
+        console.log('缓存状态:', data.forceRefresh);
       } else {
-        // 如果新端点失败，尝试旧端点
-        console.warn('新端点失败，尝试旧端点:', data.error);
-        const fallbackResponse = await fetch(`/api/results?t=${Date.now()}`);
+        // 如果强制刷新失败，尝试原有的方案
+        console.warn('强制刷新失败，尝试原方案:', data.error);
+        const fallbackResponse = await fetch(`/api/results-fresh?_t=${Date.now()}`, {
+          cache: 'no-store'
+        });
         const fallbackData = await fallbackResponse.json();
 
         if (fallbackResponse.ok) {
           setResults(fallbackData.results || []);
-          console.log('使用旧端点获取到的记录数:', fallbackData.results?.length || 0);
+          console.log('使用备用方案获取到的记录数:', fallbackData.results?.length || 0);
         } else {
           setError(data.error || fallbackData.error || '获取数据失败');
         }
