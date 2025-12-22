@@ -15,33 +15,12 @@ export default function ResultsPage() {
     setError('');
 
     try {
-      const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(7);
-      const requestId = `${timestamp}-${randomId}`;
-
-      console.log(`[${requestId}] 开始强制刷新数据...`);
-
-      // 步骤1: 先使用POST请求刷新连接
-      console.log(`[${requestId}] 步骤1: 刷新数据库连接...`);
-      await fetch(`/api/results-raw`, {
-        method: 'POST',
-        headers: {
-          'Cache-Control': 'no-cache, no-store',
-          'X-Request-ID': requestId
-        }
-      });
-
-      // 步骤2: 等待一小段时间确保连接刷新
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // 步骤3: 使用原始查询API获取最新数据
-      console.log(`[${requestId}] 步骤2: 执行原始查询...`);
-      const response = await fetch(`/api/results-raw?t=${timestamp}&r=${randomId}`, {
+      // 使用时间戳作为查询参数，强制绕过浏览器缓存
+      const response = await fetch(`/api/results?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'X-Request-ID': requestId,
-          'X-Bypass-Cache': 'true'
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
       });
 
@@ -49,57 +28,14 @@ export default function ResultsPage() {
 
       if (response.ok) {
         setResults(data.results || []);
-        console.log(`[${requestId}] ✅ 原始查询成功:`, {
-          记录数: data.results?.length || 0,
-          查询方法: data.method,
-          时间戳: data.timestamp,
-          连接ID: data.connectionId
-        });
       } else {
-        console.warn(`[${requestId}] 原始查询失败，尝试强制刷新方案:`, data.error);
-
-        // 步骤4: 如果原始查询失败，尝试之前的强制刷新方案
-        const forceRefreshResponse = await fetch(`/api/results-force-refresh?_t=${Date.now()}`, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'X-Request-ID': requestId
-          }
-        });
-
-        const forceRefreshData = await forceRefreshResponse.json();
-
-        if (forceRefreshResponse.ok) {
-          setResults(forceRefreshData.results || []);
-          console.log(`[${requestId}] ✅ 强制刷新成功:`, {
-            记录数: forceRefreshData.results?.length || 0,
-            刷新方式: forceRefreshData.method
-          });
-        } else {
-          // 步骤5: 最后的备用方案
-          console.warn(`[${requestId}] 所有方案都失败了，使用最后的备用方案`);
-          const fallbackResponse = await fetch(`/api/results-fresh?_t=${Date.now()}&backup=true`, {
-            cache: 'no-store'
-          });
-          const fallbackData = await fallbackResponse.json();
-
-          if (fallbackResponse.ok) {
-            setResults(fallbackData.results || []);
-            console.log(`[${requestId}] ✅ 备用方案成功:`, {
-              记录数: fallbackData.results?.length || 0
-            });
-          } else {
-            setError(`无法获取最新数据: ${data.error || forceRefreshData.error || fallbackData.error || '未知错误'}`);
-            console.error(`[${requestId}] ❌ 所有方案都失败了`);
-          }
-        }
+        setError(data.error || '获取数据失败');
       }
     } catch (error) {
       setError('获取数据时发生网络错误');
       console.error('Fetch error:', error);
     } finally {
       setLoading(false);
-      console.log(`[${requestId}] 刷新请求完成`);
     }
   };
 
@@ -207,7 +143,13 @@ export default function ResultsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      员工工号
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       员工姓名
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      城市
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       平均工资
@@ -223,8 +165,14 @@ export default function ResultsPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {results.map((result) => (
                     <tr key={result.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {result.employee_id}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {result.employee_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {result.city}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         ¥{result.avg_salary.toFixed(2)}

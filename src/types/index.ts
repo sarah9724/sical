@@ -13,6 +13,7 @@ export interface Salary {
   id: number;
   employee_id: string;
   employee_name: string;
+  city: string;
   month: string;
   salary_amount: number;
   created_at?: string;
@@ -21,7 +22,9 @@ export interface Salary {
 
 export interface CalculationResult {
   id: number;
+  employee_id: string;
   employee_name: string;
+  city: string;
   avg_salary: number;
   contribution_base: number;
   company_fee: number;
@@ -39,6 +42,7 @@ export interface CityUploadData {
 export interface SalaryUploadData {
   employee_id: string;
   employee_name: string;
+  city: string;
   month: string;
   salary_amount: number;
 }

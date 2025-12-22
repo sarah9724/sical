@@ -27,7 +27,9 @@ export async function GET() {
 
     // 准备导出数据
     const exportData = results.map(item => ({
+      '员工工号': item.employee_id,
       '员工姓名': item.employee_name,
+      '城市': item.city,
       '平均工资': item.avg_salary,
       '缴费基数': item.contribution_base,
       '公司缴纳金额': item.company_fee,
@@ -40,7 +42,9 @@ export async function GET() {
 
     // 设置列宽
     const colWidths = [
+      { wch: 15 }, // 员工工号
       { wch: 15 }, // 员工姓名
+      { wch: 12 }, // 城市
       { wch: 15 }, // 平均工资
       { wch: 15 }, // 缴费基数
       { wch: 18 }, // 公司缴纳金额

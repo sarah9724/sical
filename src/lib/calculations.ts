@@ -1,11 +1,27 @@
 import { supabaseAdmin } from './supabase';
 import { localStorageSalaries, localStorageCities, localStorageResults } from './local-storage';
+import type { Salary, City } from '@/types';
 
 export interface CalculationResult {
+  employee_id: string;
   employee_name: string;
+  city: string;
   avg_salary: number;
   contribution_base: number;
   company_fee: number;
+}
+
+interface EmployeeData {
+  employee_id: string;
+  employee_name: string;
+  city: string;
+  // key: month, value: { salary_amount, created_at }
+  monthlyRecords: Map<string, { salary_amount: number; created_at: string }>;
+}
+
+// 四舍五入到两位小数
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export async function calculateContributions(): Promise<CalculationResult[]> {
@@ -15,12 +31,15 @@ export async function calculateContributions(): Promise<CalculationResult[]> {
   const useLocalStorage = !supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder');
 
   // 1. 获取所有员工工资数据
-  let salaries: any[] = [];
+  let salaries: Salary[] = [];
 
   if (useLocalStorage) {
     salaries = localStorageSalaries.getAll();
   } else {
-    const { data, error } = await supabaseAdmin.from('salaries').select('*');
+    const { data, error } = await supabaseAdmin
+      .from('salaries')
+      .select('*')
+      .order('created_at', { ascending: false }); // 按创建时间降序，用于处理重复记录
     if (error) {
       throw new Error('获取工资数据失败：' + error.message);
     }
@@ -31,36 +50,68 @@ export async function calculateContributions(): Promise<CalculationResult[]> {
     throw new Error('没有找到工资数据');
   }
 
-  // 2. 按员工分组计算平均工资
-  const employeeGroups = salaries.reduce((acc: any, salary) => {
-    if (!acc[salary.employee_name]) {
-      acc[salary.employee_name] = {
-        totalSalary: 0,
-        monthCount: new Set(),
-      };
+  // 2. 按 employee_id 分组，处理同月重复记录（取最新）
+  const employeeMap = new Map<string, EmployeeData>();
+
+  for (const salary of salaries) {
+    const empId = salary.employee_id;
+
+    if (!employeeMap.has(empId)) {
+      employeeMap.set(empId, {
+        employee_id: empId,
+        employee_name: salary.employee_name,
+        city: salary.city,
+        monthlyRecords: new Map(),
+      });
     }
-    acc[salary.employee_name].totalSalary += salary.salary_amount;
-    acc[salary.employee_name].monthCount.add(salary.month);
-    return acc;
-  }, {});
 
-  const averageSalaries = Object.entries(employeeGroups).map(([name, data]: any) => ({
-    employee_name: name,
-    avg_salary: data.totalSalary / data.monthCount.size,
-  }));
+    const empData = employeeMap.get(empId)!;
+    const month = salary.month;
 
-  // 3. 获取城市标准（获取所有城市，选择最新年份的标准）
-  let cities: any[] = [];
+    // 如果该月份已有记录，比较 created_at 取最新的
+    const existingRecord = empData.monthlyRecords.get(month);
+    const currentCreatedAt = salary.created_at || '';
+
+    if (!existingRecord || currentCreatedAt > existingRecord.created_at) {
+      empData.monthlyRecords.set(month, {
+        salary_amount: salary.salary_amount,
+        created_at: currentCreatedAt,
+      });
+    }
+  }
+
+  // 3. 计算每个员工的平均工资
+  const employeeAverages: Array<{
+    employee_id: string;
+    employee_name: string;
+    city: string;
+    avg_salary: number;
+  }> = [];
+
+  for (const empData of Array.from(employeeMap.values())) {
+    let totalSalary = 0;
+    let monthCount = 0;
+
+    for (const record of Array.from(empData.monthlyRecords.values())) {
+      totalSalary += record.salary_amount;
+      monthCount++;
+    }
+
+    if (monthCount > 0) {
+      employeeAverages.push({
+        employee_id: empData.employee_id,
+        employee_name: empData.employee_name,
+        city: empData.city,
+        avg_salary: round2(totalSalary / monthCount),
+      });
+    }
+  }
+
+  // 4. 获取城市标准
+  let cities: City[] = [];
 
   if (useLocalStorage) {
     cities = localStorageCities.getAll();
-    // 按年份降序排序，获取每个城市的最新标准
-    cities.sort((a: any, b: any) => {
-      if (a.city_name !== b.city_name) {
-        return a.city_name.localeCompare(b.city_name);
-      }
-      return b.year.localeCompare(a.year);
-    });
   } else {
     const { data, error } = await supabaseAdmin
       .from('cities')
@@ -77,19 +128,29 @@ export async function calculateContributions(): Promise<CalculationResult[]> {
     throw new Error('没有找到城市标准，请先上传城市标准数据');
   }
 
-  // 为每个城市保留最新的标准（按年份降序排序后的第一条）
-  const cityMap = new Map();
-  cities.forEach((city: any) => {
-    if (!cityMap.has(city.city_name)) {
-      cityMap.set(city.city_name, city);
+  // 为每个城市保留最新年份的标准
+  const cityStandardMap = new Map<string, City>();
+  for (const city of cities) {
+    if (!cityStandardMap.has(city.city_name)) {
+      cityStandardMap.set(city.city_name, city);
     }
-  });
+  }
 
-  // 默认使用第一个城市的标准（通常是佛山的标准）
-  const cityStandard = Array.from(cityMap.values())[0];
+  // 5. 计算缴费基数和公司缴纳金额
+  const results: CalculationResult[] = [];
+  const missingCities: string[] = [];
 
-  // 4. 计算缴费基数和公司缴纳金额
-  const results: CalculationResult[] = averageSalaries.map((employee) => {
+  for (const employee of employeeAverages) {
+    const cityStandard = cityStandardMap.get(employee.city);
+
+    if (!cityStandard) {
+      // 记录找不到城市标准的情况
+      if (!missingCities.includes(employee.city)) {
+        missingCities.push(employee.city);
+      }
+      continue;
+    }
+
     let contribution_base: number;
 
     if (employee.avg_salary < cityStandard.base_min) {
@@ -100,17 +161,28 @@ export async function calculateContributions(): Promise<CalculationResult[]> {
       contribution_base = employee.avg_salary;
     }
 
-    const company_fee = contribution_base * cityStandard.rate;
+    const company_fee = round2(contribution_base * cityStandard.rate);
 
-    return {
+    results.push({
+      employee_id: employee.employee_id,
       employee_name: employee.employee_name,
+      city: employee.city,
       avg_salary: employee.avg_salary,
-      contribution_base,
+      contribution_base: round2(contribution_base),
       company_fee,
-    };
-  });
+    });
+  }
 
-  // 5. 保存计算结果
+  // 如果有城市找不到标准，抛出错误
+  if (missingCities.length > 0) {
+    throw new Error(`以下城市没有找到对应的标准数据：${missingCities.join('、')}。请先上传这些城市的标准数据。`);
+  }
+
+  if (results.length === 0) {
+    throw new Error('没有可计算的员工数据');
+  }
+
+  // 6. 保存计算结果
   if (useLocalStorage) {
     await localStorageResults.delete();
     const { error } = await localStorageResults.insert(results);

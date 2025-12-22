@@ -16,11 +16,23 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const citiesData = parseCitiesExcel(buffer);
+    const { data: citiesData, errors } = parseCitiesExcel(buffer);
 
     if (citiesData.length === 0) {
       return NextResponse.json(
         { error: 'Excel 文件中没有找到有效数据' },
+        { status: 400 }
+      );
+    }
+
+    // 如果有校验错误，返回错误信息
+    if (errors.length > 0) {
+      return NextResponse.json(
+        {
+          error: '数据校验失败',
+          validationErrors: errors.slice(0, 10), // 最多返回10条错误
+          totalErrors: errors.length,
+        },
         { status: 400 }
       );
     }
